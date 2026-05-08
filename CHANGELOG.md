@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-05-08
+
+### Added
+
+- Auto-detection of the latest Claude version from the Squirrel RELEASES feed at `downloads.claude.ai/releases/win32/x64` — no more hardcoded download URLs
+
+### Changed
+
+- Download nupkg directly from the RELEASES feed instead of extracting it from the `.exe` installer (one fewer `7z` step, slightly smaller download)
+- `--claude-download-url` now accepts a direct `.nupkg` URL or a legacy Squirrel `.exe`; leaving it empty triggers auto-detection
+- Native stub target renamed from `claude-native` to `@ant/claude-native` to match the module scope change introduced in Claude Desktop 1.6608.0
+- Default appimagetool path updated to `/usr/local/bin/appimagetool`
+
+### Fixed
+
+- Build no longer fails with "Could not find AnthropicClaude nupkg file" when using the new `downloads.claude.ai` bootstrapper installer
+- Build no longer fails with "No such file or directory" when writing the native stub (directory is now created with `mkdir -p`)
+- Removed stale reference to old Squirrel feed (`storage.googleapis.com/osprey-downloads-c02f6a0d…`) which was frozen at version `0.14.10`
+
 ## [0.2.0] - 2025-06-16
 
 ### Added
