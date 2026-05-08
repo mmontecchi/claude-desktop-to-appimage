@@ -45,7 +45,7 @@ cd claude-desktop-to-appimage
 
 Requirements:
 
-- Any Debian-based Linux distribution
+- Linux distribution (Debian/Ubuntu, openSUSE/SUSE, Fedora/RHEL, Arch/Manjaro)
 - Node.js >= 12.0.0 and npm
 
 ## Command line
@@ -88,7 +88,7 @@ Claude Desktop is an Electron application packaged as a Windows executable. Our 
 1. Downloads and extracts the Windows installer
 2. Unpacks the app.asar archive containing the application code
 3. Replaces the Windows-specific native module with a Linux-compatible implementation
-4. Repackages everything into a proper Debian package
+4. Repackages everything into a portable AppImage
 
 The process works because Claude Desktop is largely cross-platform, with only one platform-specific component that needs replacement.
 
@@ -114,7 +114,7 @@ The replacement module is carefully designed to match the original API while pro
 
 The build script (`build-appimage.sh`) handles the entire process:
 
-1. Checks for a Debian-based system and required dependencies
+1. Detects the Linux distribution family and checks for required dependencies (suggesting the correct install command for apt/zypper/dnf/pacman)
 2. Downloads the official Windows installer
 3. Extracts the application resources
 4. Processes icons for Linux desktop integration
