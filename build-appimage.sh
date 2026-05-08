@@ -97,6 +97,25 @@ fi
 echo "System Information:"
 echo "Distribution: $(cat /etc/os-release | grep "PRETTY_NAME" | cut -d'"' -f2)"
 
+# Detect distro family and set package manager + package names accordingly
+PKG_MANAGER="apt"
+PKG_7ZIP="7zip"
+PKG_IMAGEMAGICK="imagemagick"
+PKG_NODEJS="nodejs npm"
+
+DISTRO_ID=$(grep "^ID=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
+DISTRO_ID_LIKE=$(grep "^ID_LIKE=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
+
+if echo "$DISTRO_ID $DISTRO_ID_LIKE" | grep -qiE "opensuse|suse|sles"; then
+    PKG_MANAGER="zypper install -y"
+    PKG_IMAGEMAGICK="ImageMagick"
+elif echo "$DISTRO_ID $DISTRO_ID_LIKE" | grep -qiE "fedora|rhel|centos|rocky|alma"; then
+    PKG_MANAGER="dnf install -y"
+elif echo "$DISTRO_ID $DISTRO_ID_LIKE" | grep -qiE "arch|manjaro"; then
+    PKG_MANAGER="pacman -S --noconfirm"
+    PKG_7ZIP="p7zip"
+fi
+
 # Function to check if a command exists
 check_command() {
     if ! command -v "$1" &> /dev/null; then
@@ -117,7 +136,7 @@ for cmd in 7z wget wrestool icotool convert npx; do
     if ! check_command "$cmd"; then
         case "$cmd" in
             "7z")
-                DEPS_TO_INSTALL="$DEPS_TO_INSTALL 7zip"
+                DEPS_TO_INSTALL="$DEPS_TO_INSTALL $PKG_7ZIP"
                 ;;
             "wget")
                 DEPS_TO_INSTALL="$DEPS_TO_INSTALL wget"
@@ -126,10 +145,10 @@ for cmd in 7z wget wrestool icotool convert npx; do
                 DEPS_TO_INSTALL="$DEPS_TO_INSTALL icoutils"
                 ;;
             "convert")
-                DEPS_TO_INSTALL="$DEPS_TO_INSTALL imagemagick"
+                DEPS_TO_INSTALL="$DEPS_TO_INSTALL $PKG_IMAGEMAGICK"
                 ;;
             "npx")
-                DEPS_TO_INSTALL="$DEPS_TO_INSTALL nodejs npm"
+                DEPS_TO_INSTALL="$DEPS_TO_INSTALL $PKG_NODEJS"
                 ;;
         esac
     fi
@@ -137,8 +156,8 @@ done
 
 # Install system dependencies if any
 if [ ! -z "$DEPS_TO_INSTALL" ]; then
-    echo "Please install these dependecies with: "
-    echo "sudo apt install $DEPS_TO_INSTALL"
+    echo "Please install these dependencies with: "
+    echo "sudo $PKG_MANAGER $DEPS_TO_INSTALL"
     exit 1
 fi
 
