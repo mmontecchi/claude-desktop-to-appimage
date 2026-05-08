@@ -31,7 +31,7 @@ Supports the Tray menu! (Screenshot of running on KDE)
 
 ```bash
 # Clone this repository
-git clone https://github.com/fsoft72/claude-desktop-to-appimage.git
+git clone https://github.com/mmontecchi/claude-desktop-to-appimage.git
 cd claude-desktop-to-appimage
 
 # Build the AppImage
