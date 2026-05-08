@@ -142,7 +142,7 @@ for cmd in 7z wget wrestool icotool convert npx; do
                 DEPS_TO_INSTALL="$DEPS_TO_INSTALL wget"
                 ;;
             "wrestool"|"icotool")
-                DEPS_TO_INSTALL="$DEPS_TO_INSTALL icoutils"
+                echo "$DEPS_TO_INSTALL" | grep -qw "icoutils" || DEPS_TO_INSTALL="$DEPS_TO_INSTALL icoutils"
                 ;;
             "convert")
                 DEPS_TO_INSTALL="$DEPS_TO_INSTALL $PKG_IMAGEMAGICK"
