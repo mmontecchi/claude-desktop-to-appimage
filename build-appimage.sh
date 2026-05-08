@@ -7,7 +7,8 @@ set -e
 
 
 # Path to appimagetool
-APP_IMAGE_TOOL="/home/fabio/data/opt/appimagetool-x86_64.AppImage"
+APP_IMAGE_TOOL="/usr/local/bin/appimagetool"
+# old "/home/fabio/data/opt/appimagetool-x86_64.AppImage"
 
 # Set to 1 if you want to bundle Electron with the AppImage (warning - this will increase the size of the AppImage)
 # Set to 0 if you want to use the system Electron
@@ -16,8 +17,11 @@ ELECTRON_BUNDLED=0
 # Set to 1 if you want to keep the installer outside the build directory to avoid re-downloading
 KEEP_INSTALLER=0
 
-# Update this URL when a new version of Claude Desktop is released
-CLAUDE_DOWNLOAD_URL="https://storage.googleapis.com/osprey-downloads-c02f6a0d-347c-492b-a752-3e0651722e97/nest-win-x64/Claude-Setup-x64.exe"
+# Squirrel distribution feed - used to auto-detect the latest nupkg
+SQUIRREL_BASE_URL="https://downloads.claude.ai/releases/win32/x64"
+
+# Override with a direct URL to a specific .nupkg or Squirrel .exe to skip auto-detection
+CLAUDE_DOWNLOAD_URL=""
 
 # Directory where the build will be done
 WORK_DIR="/tmp/claude-build"
@@ -27,7 +31,7 @@ WORK_DIR="/tmp/claude-build"
 # ==========================================================================================
 
 # Version of this build script
-VERSION="0.2.0"
+VERSION="1.6608.0"
 
 
 # Now read command line arguments to change the above variables
@@ -70,7 +74,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --bundle-electron       Bundle Electron with the AppImage (default: $ELECTRON_BUNDLED)"
             echo "  --keep-installer        Keep installer outside build directory to avoid re-downloading"
             echo "  --clean-cache           Remove cache directory and exit"
-            echo "  --claude-download-url   URL to download the Claude Desktop installer (default: $CLAUDE_DOWNLOAD_URL)"
+            echo "  --claude-download-url   Direct URL to a .nupkg or Squirrel .exe (default: auto-detect from RELEASES feed)"
             echo "  -v, --version          Show version information"
             echo "  -h, --help             Show this help message"
             exit 0
@@ -251,51 +255,88 @@ if ! npm list -g asar > /dev/null 2>&1; then
     npm install -g asar
 fi
 
-# Download Claude Windows installer
-if [ "$KEEP_INSTALLER" -eq 1 ]; then
-    # Use cache directory for persistent storage
-    CACHE_DIR="$HOME/.cache/claude-desktop-appimage"
-    mkdir -p "$CACHE_DIR"
-    CLAUDE_EXE="$CACHE_DIR/Claude-Setup-x64.exe"
-else
-    CLAUDE_EXE="$WORK_DIR/Claude-Setup-x64.exe"
-fi
+# Resolve the nupkg to download
+cd "$WORK_DIR"
 
-if [ ! -e "$CLAUDE_EXE" ]; then
-    echo "❌ Claude Desktop installer not found. Downloading..."
-    echo "📥 Downloading Claude Desktop installer..."
-    if ! wget -O "$CLAUDE_EXE" "$CLAUDE_DOWNLOAD_URL"; then
-        echo "❌ Failed to download Claude Desktop installer"
+if [ -n "$CLAUDE_DOWNLOAD_URL" ] && [[ "$CLAUDE_DOWNLOAD_URL" == *.exe ]]; then
+    # Legacy path: download a Squirrel .exe installer and extract the nupkg from it
+    if [ "$KEEP_INSTALLER" -eq 1 ]; then
+        CACHE_DIR="$HOME/.cache/claude-desktop-appimage"
+        mkdir -p "$CACHE_DIR"
+        CLAUDE_EXE="$CACHE_DIR/Claude-Setup-x64.exe"
+    else
+        CLAUDE_EXE="$WORK_DIR/Claude-Setup-x64.exe"
+    fi
+    if [ ! -e "$CLAUDE_EXE" ]; then
+        echo "📥 Downloading Claude Desktop installer..."
+        if ! wget -O "$CLAUDE_EXE" "$CLAUDE_DOWNLOAD_URL"; then
+            echo "❌ Failed to download installer"
+            exit 1
+        fi
+        echo "✓ Download complete"
+    else
+        echo "✓ Using cached installer: $CLAUDE_EXE"
+    fi
+    echo "📦 Extracting installer..."
+    if ! 7z x -y "$CLAUDE_EXE"; then
+        echo "❌ Failed to extract installer"
         exit 1
     fi
-    echo "✓ Download complete"
+    NUPKG_PATH=$(find "$WORK_DIR" -name "AnthropicClaude-*-full.nupkg" | head -1)
+    if [ -z "$NUPKG_PATH" ]; then
+        echo "❌ Could not find AnthropicClaude nupkg inside installer"
+        exit 1
+    fi
 else
-    echo "✓ Claude Desktop installer already exists at: $CLAUDE_EXE"
+    # Default path: resolve latest nupkg directly from the Squirrel RELEASES feed
+    NUPKG_URL="${CLAUDE_DOWNLOAD_URL:-}"
+    if [ -z "$NUPKG_URL" ]; then
+        echo "🔍 Fetching latest version from Squirrel feed..."
+        RELEASES_CONTENT=$(wget -qO- "$SQUIRREL_BASE_URL/RELEASES")
+        if [ -z "$RELEASES_CONTENT" ]; then
+            echo "❌ Could not fetch RELEASES feed from $SQUIRREL_BASE_URL"
+            exit 1
+        fi
+        LATEST_NUPKG=$(echo "$RELEASES_CONTENT" | grep "\-full\.nupkg" | tail -1 | awk '{print $2}')
+        if [ -z "$LATEST_NUPKG" ]; then
+            echo "❌ Could not parse latest nupkg from RELEASES feed"
+            exit 1
+        fi
+        NUPKG_URL="$SQUIRREL_BASE_URL/$LATEST_NUPKG"
+        echo "✓ Latest package: $LATEST_NUPKG"
+    fi
+
+    NUPKG_NAME=$(basename "$NUPKG_URL")
+    if [ "$KEEP_INSTALLER" -eq 1 ]; then
+        CACHE_DIR="$HOME/.cache/claude-desktop-appimage"
+        mkdir -p "$CACHE_DIR"
+        NUPKG_PATH="$CACHE_DIR/$NUPKG_NAME"
+    else
+        NUPKG_PATH="$WORK_DIR/$NUPKG_NAME"
+    fi
+
+    if [ ! -e "$NUPKG_PATH" ]; then
+        echo "📥 Downloading $NUPKG_NAME..."
+        if ! wget -O "$NUPKG_PATH" "$NUPKG_URL"; then
+            echo "❌ Failed to download nupkg"
+            exit 1
+        fi
+        echo "✓ Download complete"
+    else
+        echo "✓ Using cached package: $NUPKG_PATH"
+    fi
 fi
 
-# Extract resources
-echo "📦 Extracting resources..."
-cd "$WORK_DIR"
-if ! 7z x -y "$CLAUDE_EXE"; then
-    echo "❌ Failed to extract installer"
-    exit 1
-fi
-
-# Extract nupkg filename and version
-NUPKG_PATH=$(find . -name "AnthropicClaude-*.nupkg" | head -1)
-if [ -z "$NUPKG_PATH" ]; then
-    echo "❌ Could not find AnthropicClaude nupkg file"
-    exit 1
-fi
-
-# Extract version from the nupkg filename
-VERSION=$(echo "$NUPKG_PATH" | grep -oP 'AnthropicClaude-\K[0-9]+\.[0-9]+\.[0-9]+(?=-full)')
+# Extract version from nupkg filename
+VERSION=$(basename "$NUPKG_PATH" | grep -oP 'AnthropicClaude-\K[0-9]+\.[0-9]+\.[0-9]+(?=-full)')
 if [ -z "$VERSION" ]; then
-    echo "❌ Could not extract version from nupkg filename"
+    echo "❌ Could not extract version from nupkg filename: $(basename "$NUPKG_PATH")"
     exit 1
 fi
 echo "✓ Detected Claude version: $VERSION"
 
+# Extract resources from nupkg
+echo "📦 Extracting resources..."
 if ! 7z x -y "$NUPKG_PATH"; then
     echo "❌ Failed to extract nupkg"
     exit 1
@@ -353,7 +394,8 @@ npx asar extract app.asar app.asar.contents
 
 # Replace native module with stub implementation
 echo "Creating stub native module..."
-cat > app.asar.contents/node_modules/claude-native/index.js << EOF
+mkdir -p app.asar.contents/node_modules/@ant/claude-native
+cat > app.asar.contents/node_modules/@ant/claude-native/index.js << EOF
 // Stub implementation of claude-native using KeyboardKey enum values
 const KeyboardKey = {
   Backspace: 43,
@@ -453,8 +495,8 @@ echo "##############################################################"
 npx asar pack app.asar.contents app.asar
 
 # Create native module with keyboard constants
-mkdir -p "$APP_DIR/usr/lib/claude-desktop/app.asar.unpacked/node_modules/claude-native"
-cat > "$APP_DIR/usr/lib/claude-desktop/app.asar.unpacked/node_modules/claude-native/index.js" << EOF
+mkdir -p "$APP_DIR/usr/lib/claude-desktop/app.asar.unpacked/node_modules/@ant/claude-native"
+cat > "$APP_DIR/usr/lib/claude-desktop/app.asar.unpacked/node_modules/@ant/claude-native/index.js" << EOF
 // Stub implementation of claude-native using KeyboardKey enum values
 const KeyboardKey = {
   Backspace: 43,
